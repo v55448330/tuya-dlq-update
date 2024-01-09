@@ -15,6 +15,7 @@ registry = CollectorRegistry()
 dlq_voltage_gauge = Gauge('xiaobao_home_dlq_voltage', 'dlq voltage(V)', ['phase'])
 dlq_current_gauge = Gauge('xiaobao_home_dlq_current', 'dlq current(A)', ['phase'])
 dlq_power_gauge = Gauge('xiaobao_home_dlq_power', 'dlq power(kW)', ['phase'])
+dlq_total_energy_gauge = Gauge('xiaobao_home_dlq_total_energy', 'dlq total energy(W)')
 
 def get_dlq_status():
     c = tinytuya.Cloud(
@@ -27,7 +28,7 @@ def get_dlq_status():
     try:
         status=c.getstatus(device_id)
         if status.get("success", False):
-            _status = {}
+            _status = {"phase": {}, "total_forward_energy": 0}
             for i in status.get("result",[]):
                 if "phase_" in i.get("code"):
                     __raw = base64.b64decode(i.get("value"))
@@ -39,10 +40,13 @@ def get_dlq_status():
                         "current": str(current),
                         "power": str(power)
                     }
+
+                if "total_forward_energy" in i.get("code"):
+                    _status[i.get("code")] = i.get("value")
             return _status
         return {}
 
-    except Exception(e):
+    except Exception as e:
         print(str(e))
         return {}
 
@@ -50,10 +54,11 @@ def metrics_update():
     while True:
         dlq_status = get_dlq_status()
         if dlq_status:
-            for phase in dlq_status:
-                dlq_voltage_gauge.labels(phase).set(dlq_status[phase]['voltage'])
-                dlq_current_gauge.labels(phase).set(dlq_status[phase]['current'])
-                dlq_power_gauge.labels(phase).set(dlq_status[phase]['power'])
+            for phase in dlq_status["phase"]:
+                dlq_voltage_gauge.labels(phase).set(dlq_status["phase"][phase]['voltage'])
+                dlq_current_gauge.labels(phase).set(dlq_status["phase"][phase]['current'])
+                dlq_power_gauge.labels(phase).set(dlq_status["phase"][phase]['power'])
+            dlq_total_energy_gauge.set(dlq_status["total_forward_energy"])
         time.sleep(int(update_interval))
 
 if __name__ == '__main__':
