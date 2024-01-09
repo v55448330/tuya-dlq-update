@@ -35,7 +35,7 @@ def get_dlq_status():
                     voltage = struct.unpack('>H', __raw[0:2])[0] / 10.0
                     current = struct.unpack('>L', b'\x00' + __raw[2:5])[0] / 1000.0
                     power = struct.unpack('>L', b'\x00' + __raw[5:8])[0] / 1000.0
-                    _status[i.get("code")] = {
+                    _status["phase"][i.get("code")] = {
                         "voltage": str(voltage),
                         "current": str(current),
                         "power": str(power)
@@ -54,6 +54,7 @@ def metrics_update():
     while True:
         dlq_status = get_dlq_status()
         if dlq_status:
+            print(dlq_status)
             for phase in dlq_status["phase"]:
                 dlq_voltage_gauge.labels(phase).set(dlq_status["phase"][phase]['voltage'])
                 dlq_current_gauge.labels(phase).set(dlq_status["phase"][phase]['current'])
