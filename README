@@ -1,0 +1,10 @@
+```
+docker run -d --restart=always \
+    -e 'LISTEN_PORT=6666' \
+    -e 'TUYA_API_KEY=<you API KEY>' \
+    -e 'TUYA_API_SECRET=<you API SECRET>' \
+    -e 'TUYA_DEVICE_ID=<you dlq DEVICE ID>' \
+    -e 'UPDATE_INTERVAL=60' \
+    -p 6666:6666 \
+    v55448330/tuya-dlq-update:v0.2
+```
