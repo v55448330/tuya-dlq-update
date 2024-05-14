@@ -1,2 +1,3 @@
 tinytuya==1.12.8
 prometheus-client==0.17.0
+paho-mqtt==2.1.0

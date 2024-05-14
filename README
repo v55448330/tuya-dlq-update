@@ -4,7 +4,11 @@ docker run -d --restart=always \
     -e 'TUYA_API_KEY=<you API KEY>' \
     -e 'TUYA_API_SECRET=<you API SECRET>' \
     -e 'TUYA_DEVICE_ID=<you dlq DEVICE ID>' \
+    -e 'MQTT_BROKER'=<ecorehome mqtt broker> \
+    -e 'MQTT_PORT'=<ecorehome mqtt broker port> \
+    -e 'MQTT_USERNAME'=<ecorehome mqtt username> \
+    -e 'MQTT_PASSWORD'=<ecorehome mqtt password> \
     -e 'UPDATE_INTERVAL=60' \
     -p 6666:6666 \
-    v55448330/tuya-dlq-update:v0.2
+    v55448330/tuya-dlq-update:v0.3
 ```

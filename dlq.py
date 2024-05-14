@@ -1,21 +1,31 @@
 from prometheus_client import start_http_server, Gauge, CollectorRegistry
+import paho.mqtt.client as mqtt
 import tinytuya
 import base64
 import struct
+import json
 import time
 import os
 
-PORT = os.environ.get('LISTEN_PORT', 6666)
+LISTEN_PORT = os.environ.get('LISTEN_PORT', 6666)
+MQTT_PORT = os.environ.get('MQTT_PORT', 1883)
+MQTT_BROKER = os.environ.get('MQTT_BROKER')
+MQTT_USERNAME = os.environ.get('MQTT_USERNAME')
+MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD')
 tuya_api_key = os.environ.get('TUYA_API_KEY')
 tuya_api_secret = os.environ.get('TUYA_API_SECRET')
 tuya_device_id = os.environ.get('TUYA_DEVICE_ID')
-update_interval = os.environ.get('UPDATE_INTERVAL', 60)
+update_interval = os.environ.get('UPDATE_INTERVAL', 30)
 
 registry = CollectorRegistry()
 dlq_voltage_gauge = Gauge('xiaobao_home_dlq_voltage', 'dlq voltage(V)', ['phase'])
 dlq_current_gauge = Gauge('xiaobao_home_dlq_current', 'dlq current(A)', ['phase'])
 dlq_power_gauge = Gauge('xiaobao_home_dlq_power', 'dlq power(kW)', ['phase'])
 dlq_total_energy_gauge = Gauge('xiaobao_home_dlq_total_energy', 'dlq total energy(W)')
+
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+client.connect(MQTT_BROKER, int(MQTT_PORT), 30)
 
 def get_dlq_status():
     c = tinytuya.Cloud(
@@ -50,18 +60,80 @@ def get_dlq_status():
         print(str(e))
         return {}
 
+def send_mqtt(topic, payload):
+    topic = topic
+    payload = payload
+    qos = 0
+    client.publish(topic, payload, qos)
+    time.sleep(1)
+
+def build_discovery_payload(item):
+    topic = "ecorehome/xiaobao/{item}/info".format(item=item)
+    stype = 0
+    unit = ""
+    if "voltage" in item:
+        stype = 20
+        unit = "V"
+    elif "current" in item:
+        stype = 21
+        unit = "A"
+    elif "power" in item:
+        stype = 22
+        unit = "W"
+    else:
+        stype = 23
+        unit = "kWh"
+
+    payload = {
+        "devid": "dlq_{item}".format(item=item),
+        "model": 1,  
+        "parentsid": "xiaobao_dlq", 
+        "stype": stype,
+        "unit": unit,
+        "get_topic": "dlq/{item}/state".format(item=item),
+        "dev": {
+            "name": item,
+            "vmodel": "xiaobao.dlq.tuya",
+            "sw": "1.0.0",
+            "manufacturer": "xiaobao"
+        }
+    }
+    return topic, payload
+
+def ecorehome_discovery():
+    dlq_status = get_dlq_status()
+    for phase in dlq_status["phase"]:
+        for phase_item in dlq_status["phase"][phase].keys():
+            discovery_payload = build_discovery_payload("{phase}_{phase_item}".format(phase=phase, phase_item=phase_item))
+            send_mqtt(discovery_payload[0], json.dumps(discovery_payload[1]))
+
+    discovery_payload = build_discovery_payload("total_forward_energy")
+    send_mqtt(discovery_payload[0], json.dumps(discovery_payload[1]))
+
 def metrics_update():
     while True:
         dlq_status = get_dlq_status()
         if dlq_status:
-            print(dlq_status)
             for phase in dlq_status["phase"]:
-                dlq_voltage_gauge.labels(phase).set(dlq_status["phase"][phase]['voltage'])
+                state = dlq_status["phase"][phase]['voltage']
+                dlq_voltage_gauge.labels(phase).set(state)
+                send_mqtt("dlq/{item}_voltage/state".format(item=phase), json.dumps({"voltage": state}))
+
+                state = dlq_status["phase"][phase]['current']
                 dlq_current_gauge.labels(phase).set(dlq_status["phase"][phase]['current'])
+                send_mqtt("dlq/{item}_current/state".format(item=phase), json.dumps({"current": state}))
+
+                state = dlq_status["phase"][phase]['power']
                 dlq_power_gauge.labels(phase).set(dlq_status["phase"][phase]['power'])
+                send_mqtt("dlq/{item}_power/state".format(item=phase), json.dumps({"loadpower": float(state) * 1000}))
+
+            state = dlq_status["total_forward_energy"] 
             dlq_total_energy_gauge.set(dlq_status["total_forward_energy"])
+            send_mqtt("dlq/total_forward_energy/state".format(item=phase), json.dumps({"powerconsumed": float(state) / 100}))
+
         time.sleep(int(update_interval))
 
 if __name__ == '__main__':
-    start_http_server(int(PORT))
+    start_http_server(int(LISTEN_PORT))
+    ecorehome_discovery()
     metrics_update()
