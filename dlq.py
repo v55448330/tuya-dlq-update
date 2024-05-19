@@ -5,6 +5,7 @@ import base64
 import struct
 import json
 import time
+import sys
 import os
 
 LISTEN_PORT = os.environ.get('LISTEN_PORT', 6666)
@@ -23,26 +24,16 @@ dlq_current_gauge = Gauge('xiaobao_home_dlq_current', 'dlq current(A)', ['phase'
 dlq_power_gauge = Gauge('xiaobao_home_dlq_power', 'dlq power(kW)', ['phase'])
 dlq_total_energy_gauge = Gauge('xiaobao_home_dlq_total_energy', 'dlq total energy(W)')
 
-def mqtt_on_disconnect(client, userdata, rc):
-    if rc != 0:
-        while True:
-            try:
-                client.reconnect()
-                break
-            except:
-                time.sleep(10)
-                pass
-
 def init_mqtt():
     try:
         client = mqtt.Client()
         client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
         client.connect(MQTT_BROKER, int(MQTT_PORT), 2)
-        client.on_disconnect = mqtt_on_disconnect
         client.loop_start()
         return client
     except Exception as e:
-        print(e)
+        print(str(e))
+        sys.exit(1)
 
 def get_dlq_status():
     c = tinytuya.Cloud(
@@ -82,13 +73,17 @@ def send_mqtt(topic, payload, client):
     try:
         topic = topic
         payload = payload
-        qos = 0
-        client.publish(topic, payload, qos)
+        qos = 1
+        result = client.publish(topic, payload, qos)
+        if result[0] != 0:
+            sys.exit(1)
+
         time.sleep(1)
     except Exception as e:
-        print(e)
+        print(str(e))
         print(topic)
         print(payload)
+        sys.exit(1)
 
 def build_discovery_payload(item):
     topic = "ecorehome/xiaobao/{item}/info".format(item=item)
@@ -160,18 +155,13 @@ def metrics_update(client):
                 send_mqtt("dlq/total_forward_energy/state".format(item=phase), json.dumps({"powerconsumed": float(state) / 100}), client)
 
         except Exception as e:
-            print(e)
+            print(str(e))
+            sys.exit(1)
 
         time.sleep(int(update_interval))
 
 if __name__ == '__main__':
     start_http_server(int(LISTEN_PORT))
-
     client = init_mqtt()
-    if not client:
-        while True:
-            client = init_mqtt()
-            time.sleep(10)
-
     ecorehome_discovery(client)
     metrics_update(client)
