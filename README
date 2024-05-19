@@ -10,5 +10,5 @@ docker run -d --restart=always \
     -e 'MQTT_PASSWORD'=<ecorehome mqtt password> \
     -e 'UPDATE_INTERVAL=60' \
     -p 6666:6666 \
-    v55448330/tuya-dlq-update:v0.3
+    v55448330/tuya-dlq-update:v0.4
 ```

@@ -57,15 +57,20 @@ def get_dlq_status():
         return {}
 
     except Exception as e:
-        print(str(e))
+        print(e)
         return {}
 
 def send_mqtt(topic, payload):
-    topic = topic
-    payload = payload
-    qos = 0
-    client.publish(topic, payload, qos)
-    time.sleep(1)
+    try:
+        topic = topic
+        payload = payload
+        qos = 0
+        client.publish(topic, payload, qos)
+        time.sleep(1)
+    except Expection as e:
+        print(e)
+        print(topic)
+        print(payload)
 
 def build_discovery_payload(item):
     topic = "ecorehome/xiaobao/{item}/info".format(item=item)
@@ -105,9 +110,13 @@ def ecorehome_discovery():
     for phase in dlq_status["phase"]:
         for phase_item in dlq_status["phase"][phase].keys():
             discovery_payload = build_discovery_payload("{phase}_{phase_item}".format(phase=phase, phase_item=phase_item))
+            print(discovery_payload)
+
             send_mqtt(discovery_payload[0], json.dumps(discovery_payload[1]))
 
     discovery_payload = build_discovery_payload("total_forward_energy")
+    print(discovery_payload)
+
     send_mqtt(discovery_payload[0], json.dumps(discovery_payload[1]))
 
 def metrics_update():
